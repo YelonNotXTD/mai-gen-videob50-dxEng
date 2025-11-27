@@ -792,15 +792,24 @@ def parse_dxrating_json(song_json, song_id_placeholder):
     return chart
 
 ################################################
+# Read B50 from MMBL text export
+################################################
+
+def read_mmbl_text(b50_raw_file, username):
+
+    return chart
+
+################################################
 # Update local cache files
 ################################################
 
 def update_b50_data_int(b50_raw_file, username, params, parser) -> dict:
-    data_parser = read_b50_from_html # html parser is default
-    if parser == "html":
-        data_parser = read_b50_from_html
-    elif parser == "json":
-        data_parser = read_dxrating_json
+    parser_map = {
+        "html": read_b50_from_html,
+        "json": read_dxrating_json,
+        "mmbl": read_mmbl_text
+    }
+    data_parser = parser_map.get(parser, read_b50_from_html)
 
     # building b50_raw
     parsed_data = data_parser(b50_raw_file, username)

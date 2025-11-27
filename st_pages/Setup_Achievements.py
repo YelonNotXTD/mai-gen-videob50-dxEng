@@ -276,6 +276,16 @@ def handle_new_data(username: str, source: str, raw_file_path: str, params: dict
         st.error(f"创建新存档时发生错误: {e}")
         st.expander("错误详情").write(traceback.format_exc())
 
+def intl_text_detect(data_input: str):
+    data = data_input.strip()
+    if data.startswith("Song\t"):
+        return "mmbl"
+    if data.startswith("<!DOCTYPE html>"):
+        return "html"
+    if data.startswith("[{"):
+        return "json"
+    return None
+
 # =============================================================================
 # Page layout starts here
 # ==============================================================================
@@ -643,22 +653,50 @@ if st.session_state.get('config_saved', False):
                 st.warning("落雪查分器目前仅支持中二节奏数据获取。")
 
         # Data from DX Web (INTL/JP Server)
-        with st.expander("从 DX Rating Net 导入（国际服/日服）"):
+        with st.expander("从多种数据源导入B50（国际服/日服）"):
             if G_type == "maimai":
-                st.write("请将maimai DX NET(官网)获取的源代码，或 DX Rating 网站导出的JSON代码粘贴到下方。")
-                data_input = st.text_area("粘贴源代码或JSON", height=200)
-                
+                data_source = st.radio(
+                    "1. 请选择数据类型：",
+                    options = ["auto", "html", "json", "mmbl", "mmbl_ap"],
+                    format_func = lambda x: {
+                        "auto": "AUTO: 自动判断并提取B50（依赖数据源开头的特征字符串）",
+                        "html": f"HTML: 从官网Maimai DX NET[国际服](https://maimaidx-eng.com/maimai-mobile/home/ratingTargetMusic/)或[日服](https://maimaidx.jp/maimai-mobile/home/ratingTargetMusic/)获取的HTML源代码。",
+                        "json": f"JSON: 从[DX Rating](https://dxrating.net/rating)导出的B50 JSON文本。",
+                        "mmbl": f"MMBL: 使用[Maimai Bookmarklet](https://myjian.github.io/mai-tools/)插件导出的成绩列表。（测试中）",
+                        "mmbl_ap": f"MMBL-AP50:  同上，但是会提取AP50。（测试中）"
+                    }[x],
+                    index = 1 # default = html
+                )
+
+                data_input = st.text_area("2. 在这里粘贴数据源文本", height=200)
                 if st.button("从粘贴内容创建新存档"):
-                    if data_input:
-                        file_type = "json" if data_input.strip().startswith("[{") else "html"
-                        b50_raw_file = f"{user_base_dir}/b50_raw.{file_type}"
-                        handle_new_data(username, source="intl",
-                                        raw_file_path=b50_raw_file,
-                                        params={"type": "maimai", "query": "best"}, parser=file_type)
+                    if not data_input:
+                        st.warning("数据源文本不能为空！")
                     else:
-                        st.warning("输入框内容为空。")
+                        if data_source == "auto":
+                            file_type = intl_text_detect(data_input)
+                            if file_type is None:
+                                st.error("未能识别数据格式，请手动选择类型。")
+                                st.stop()
+                        else:
+                            file_type = data_source
+                        # Data handling
+                        file_args = {
+                            "html": {"suffix": "html", "params": {"type": "maimai", "query": "best"}},
+                            "json": {"suffix": "json", "params": {"type": "maimai", "query": "best"}},
+                            "mmbl": {"suffix": "tsv", "params": {"type": "maimai", "query": "best"}},
+                            "mmbl_ap": {"suffix": "tsv", "params": {"type": "maimai", "query": "all", "filter": {"tag": "ap", "top": 50}}}
+                        }
+                        b50_raw_file = f"{user_base_dir}/b50_raw_{file_type}.{file_args[file_type]['suffix']}"
+                        handle_new_data(
+                            username,
+                            source="intl",
+                            raw_file_path=b50_raw_file,
+                            params=file_args[file_type]['params'],
+                            parser=file_type
+                        )
             else:
-                st.warning(f"暂未支持从国际服/日服数据导入中二节奏数据，如有需要请在左侧导航栏使用自定义{data_name}功能手动配置。")
+                 st.warning(f"暂未支持从国际服/日服数据导入中二节奏数据，如有需要请在左侧导航栏使用自定义{data_name}功能手动配置。")
 
     # --- Navigation ---
     st.divider()
