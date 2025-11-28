@@ -1,6 +1,16 @@
 from utils.PageUtils import load_music_metadata
 
+"""
+这个文件包含较为原始的为支持国际服/日服maimaiDx Net数据处理的工具方法。
+在v1.0重构中不再被使用，部分工具方法移动至utils.DataUtils或utils.user_gamedata_handlers
+
+This file contains some legacy utility methods for handling maimai Dx Net data for international/Japanese servers.
+These methods are no longer used in the v1.0 refactor,
+and some have been moved to [utils.DataUtils] or [utils.user_gamedata_handlers].
+"""
+
 # Parse achievement to rate name
+@DeprecationWarning
 def get_rate(achievement):
     rates = [
         (100.5, "sssp"),
@@ -25,6 +35,7 @@ def get_rate(achievement):
     return "d"
 
 # DX rating factors
+@DeprecationWarning
 def get_factor(achievement):
     factors = [
         (100.5, 0.224),
@@ -54,10 +65,12 @@ def get_factor(achievement):
     return 0
 
 # Compute DX rating for a single song
+@DeprecationWarning
 def compute_rating(ds, score):
     return int(ds * min(score, 100.5) * get_factor(score))
 
 # Compute Chunithm rating for a single song
+@DeprecationWarning
 def compute_chunithm_rating(ds, score):
     try:
         s = int(float(score))
@@ -92,9 +105,11 @@ def compute_chunithm_rating(ds, score):
 
     return 0.0
 
+@DeprecationWarning
 def parse_level(ds):
     return f"{int(ds)}+" if int((ds * 10) % 10) >= 6 else str(int(ds))
 
+@DeprecationWarning
 class ChartManager:
     
     def __init__(self, compute_total_rating = True):

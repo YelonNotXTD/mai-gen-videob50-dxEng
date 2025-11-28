@@ -208,19 +208,19 @@ def confirm_delete_archive(username: str, archive_name: str):
     if st.button("取消"):
         st.rerun()
 
-def handle_new_data(username: str, source: str, raw_file_path: str, params: dict = None, parser: str = "json"):
+def handle_new_data(username: str, source: str, raw_file_path: str, params: dict = None):
     """
     Fetches new data from a source, then creates a new archive in the database.
     This function is a placeholder for the actual data fetching logic.
     """
     try:
         # 重构：查分，并创建存档，原始数据缓存于raw_file_path
-        if source == "intl":
+        if source in ["intl", "local"]:
             new_archive_data = update_b50_data_int(
-                b50_raw_file=raw_file_path,
+                raw_file_path=raw_file_path,
+                data_type=params.get("data_type", "html"),
                 username=username,
-                params=params,
-                parser=parser
+                params=params
             )
         elif source in ["fish", "lxns"]:
             new_archive_data = fetch_user_gamedata(
@@ -674,26 +674,27 @@ if st.session_state.get('config_saved', False):
                         st.warning("数据源文本不能为空！")
                     else:
                         if data_source == "auto":
-                            file_type = intl_text_detect(data_input)
-                            if file_type is None:
+                            data_type = intl_text_detect(data_input)
+                            if data_type is None:
                                 st.error("未能识别数据格式，请手动选择类型。")
                                 st.stop()
                         else:
-                            file_type = data_source
+                            data_type = data_source
                         # Data handling
-                        file_args = {
-                            "html": {"suffix": "html", "params": {"type": "maimai", "query": "best"}},
-                            "json": {"suffix": "json", "params": {"type": "maimai", "query": "best"}},
-                            "mmbl": {"suffix": "tsv", "params": {"type": "maimai", "query": "best"}},
-                            "mmbl_ap": {"suffix": "tsv", "params": {"type": "maimai", "query": "all", "filter": {"tag": "ap", "top": 50}}}
+                        data_args = {
+                            "html": {"suffix": "html", "params": {"type": "maimai", "query": "best", "data_type": "html"}},
+                            "json": {"suffix": "json", "params": {"type": "maimai", "query": "best", "data_type": "json"}},
+                            "mmbl": {"suffix": "tsv", "params": {"type": "maimai", "query": "best", "data_type": "mmbl"}},
+                            "mmbl_ap": {"suffix": "tsv", "params": {"type": "maimai", "query": "all", "filter": {"tag": "ap", "top": 50}, "data_type": "mmbl"}}
                         }
-                        b50_raw_file = f"{user_base_dir}/b50_raw_{file_type}.{file_args[file_type]['suffix']}"
+                        # TODO: 将data_input保存raw文件
+                        b50_raw_file = f"{user_base_dir}/b50_raw_{data_type}.{data_args[data_type]['suffix']}"
                         handle_new_data(
                             username,
                             source="intl",
                             raw_file_path=b50_raw_file,
-                            params=file_args[file_type]['params'],
-                            parser=file_type
+                            params=data_args[data_type]['params'],
+                            #data_type=data_type
                         )
             else:
                  st.warning(f"暂未支持从国际服/日服数据导入中二节奏数据，如有需要请在左侧导航栏使用自定义{data_name}功能手动配置。")

@@ -797,22 +797,22 @@ def parse_dxrating_json(song_json, song_id_placeholder):
 
 def read_mmbl_text(b50_raw_file, username):
 
-    return chart
+    return NotImplementedError("MMBL text parsing is not implemented yet.")
 
 ################################################
 # Update local cache files
 ################################################
 
-def update_b50_data_int(b50_raw_file, username, params, parser) -> dict:
+def update_b50_data_int(raw_file_path, data_type, username, params) -> dict:
     parser_map = {
         "html": read_b50_from_html,
         "json": read_dxrating_json,
         "mmbl": read_mmbl_text
     }
-    data_parser = parser_map.get(parser, read_b50_from_html)
+    data_parser = parser_map.get(data_type, read_b50_from_html)
 
     # building b50_raw
-    parsed_data = data_parser(b50_raw_file, username)
+    parsed_data = data_parser(raw_file_path, username)
 
     # building b50_config
     return generate_data_file_int(parsed_data, params)
