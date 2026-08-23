@@ -345,6 +345,36 @@ def get_record_tags_from_data_dict(records_data: List[Dict]) -> List[str]:
         ret_tags.append(format_record_tag(game_type, clip_title_name, song_id, chart_type, level_index, song_name, chart_id))
     return ret_tags
 
+def maimai_fc_status_to_label(fc_status) -> str:
+    if fc_status is int:
+        match fc_status:
+            case 1:
+                return "fc"
+            case 2:
+                return "fcp"
+            case 3:
+                return "ap"
+            case 4:
+                return "app"
+            case _:
+                return "none"    
+
+def maimai_fs_status_to_label(fs_status) -> str:
+    if fs_status is int:
+        match fs_status:
+            case 1:
+                return "sync"
+            case 2:
+                return "fs"
+            case 3:
+                return "fsp"
+            case 4:
+                return "fsd"
+            case 5:
+                return "fsdp"
+            case _:
+                return "none"       
+
 def chunithm_fc_status_to_label(fc_status: int) -> str:
     match fc_status:
         case "fullcombo":
@@ -647,7 +677,7 @@ def search_songs(query, songs_data, game_type:str, level_index:int) -> List[tupl
     else:
         raise ValueError("Unsupported game type for search.")
     
-def exact_match_chart(query, songs_data, game_type="maimai") -> dict:
+def exact_match_chart(query, songs_data, game_type="maimai", use_latest_level=True) -> dict:
     """
     Match exact chart with given song_data, which should contain title, level_index, chart_type, and usually from HTML source with complete metadata. This is used for matching the exact chart when generating video for a specific record, to ensure we get the correct difficulty and max score information.
 
@@ -663,7 +693,6 @@ def exact_match_chart(query, songs_data, game_type="maimai") -> dict:
         game_type: str, only "maimai" used currently, as this is a method for parsing HTML source.
     """
     chart_data = {}
-    use_latest_level = True # 目前该函数只用于国际服/日服查曲
     if game_type == "maimai":
         # Don't use 'get' here to ensure we raise error if any of the required fields is missing
         for song in songs_data:
@@ -1201,8 +1230,8 @@ def mujs_to_unified(mujs_data: list, params: dict = None) -> list:
             music_id = detail.get("musicId", 0)
             level_index = detail.get("level", 0)
             achievement_raw = detail.get("achievement", 0)
-            combo_status = detail.get("comboStatus", 0)
-            sync_status = detail.get("syncStatus", 0)
+            combo_status = maimai_fc_status_to_label(detail.get("comboStatus", 0))
+            sync_status = maimai_fs_status_to_label(detail.get("syncStatus", 0))
             play_count = detail.get("playCount", 0)
 
             song = get_song_by_munet_id(music_id)
@@ -1263,7 +1292,7 @@ def crbl_to_unified(crbl_data: list, params: dict = None) -> list:
                     },
                     ...]
             }
-        params:
+        params: not used currently
 
     Returns:
         unified: list of dict, will be used for querying charts and form b50
@@ -1294,14 +1323,62 @@ def rin_to_unified(rin_data: list, params: dict = None) -> list:
     Unify data format from output of RIN profile exporting
 
     Args:
-        rin_data: list of dict (JSON)
-        params: 
+        rin_data: list of dict (JSON), example
+            {
+                ...
+                "userMusicDetailList": [
+                    {
+                        "musicId": 2629,
+                        "level": 2,
+                        "playCount": 2,
+                        "scoreMax": 987569,
+                        "missCount": 16,
+                        "maxComboCount": 202,
+                        "isFullCombo": false,
+                        "isAllJustice": false,
+                        "isSuccess": 1,
+                        "scoreRank": 8
+                    },
+                    ...
+                    ],
+                    ...
+            }
+        params: not used currently:
     
     Returns:
         unified: list of dict, will be used for querying charts and filtering b50
     """
+    unified = []
+    for detail in rin_data.get("userMusicDetailList", []):
+        music_id = detail.get("musicId", 0)
+        level_index = detail.get("level", 0)
+        achievement = detail.get("scoreMax", 0)
+        achievement_str = f"{achievement}"
+        combo_status = "aj" if detail.get("isAllJustice", False) else ("fc" if detail.get("isFullCombo", False) else "none")
+        play_count = detail.get("playCount", 0)
 
-    pass
+        song = index_songs_metadata("chunithm", "otoge", music_id, 0)
+        title = song.get("title", "") if song else ""
+        artist = song.get("artist", None) if song else None
+        if not title:
+            print(f"Warning: 无法在otoge id中找到{music_id}对应的歌曲元数据，已跳过该成绩。")
+            continue
+
+        unified.append({
+            "query": {
+                "title": title,
+                "artist": artist,
+                "level_index": level_index,
+                "chart_type": 0
+            },
+            "achievement": achievement_str,
+            "fc_status": combo_status,
+            "fs_status": "none",
+            "is_new": False, # RIN data does not provide version info, default to False
+            "play_count": play_count,
+            "raw_data": detail
+        })
+    return unified
 
 def filter_unified_b50(unified_data: list, filter: dict, game_type="maimai") -> list:
     SONGS_METADATA = load_metadata(game_type)
@@ -1434,7 +1511,7 @@ def filter_unified_b50(unified_data: list, filter: dict, game_type="maimai") -> 
             keep_past_len += 1
         past_results = past_results[:keep_past_len]
     else:
-        new_results = new_results[:best_new_len]
+        past_results = past_results[:best_past_len]
 
     def dx_rating_support_ordering(results):
         """当在 dx_rating 标记了负值作为辅助排序序号使用, 保证成绩的相对位置不变"""
@@ -1468,7 +1545,7 @@ def filter_unified_b50(unified_data: list, filter: dict, game_type="maimai") -> 
         avg_new_rating = sum(r[1]["chuni_rating"] for r in new_results[:best_new_len]) / best_new_len if new_results else 0
         avg_past_rating = sum(r[1]["chuni_rating"] for r in past_results[:best_past_len]) / best_past_len if past_results else 0
         from math import floor
-        avg_rating = (best_new_len * round(avg_new_rating, 4) + best_past_len * round(avg_past_rating, 4)) / 50
+        avg_rating = (best_new_len * round(avg_new_rating, 4) + best_past_len * round(avg_past_rating, 4)) / (best_new_len + best_past_len)
         extra_data["rating"] = floor(round(avg_rating, 4) * 100) / 100.0
 
     record_data = []

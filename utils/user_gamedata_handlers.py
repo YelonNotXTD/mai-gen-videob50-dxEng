@@ -451,6 +451,7 @@ def generate_archive_data_from_unified(unified_data: list, username, params) -> 
     query = params.get("query", "all")
     query_filter = params.get("filter", {})
     tag = query_filter.get("tag", "")
+    print(f"DEBUG: game_type={game_type}, query={query}, query_filter={query_filter}")
 
     if query == "all" and not query_filter:
         print("Warning: query is set to \"all\" but no filter provided.")

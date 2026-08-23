@@ -220,11 +220,11 @@ def other_data_import_guide(game_type = "maimai"):
             "Mai-gen Booklet 成绩加载工具"
         ],
         "CGBL_LINK": [
-            "https://yelonnotxtd.github.io/load_chuni_score.js",
+            "https://yelonnotxtd.github.io/load_chunithm_score.js",
             "Chu-gen Booklet 成绩加载工具"
         ],
         "CRBL_LINK": [
-            "https://yelonnotxtd.github.io/load_chuni_score_rin.js",
+            "https://yelonnotxtd.github.io/load_chunithm_score_rin.js",
             "Chu-gen RinNET Booklet 成绩加载工具"
         ],
     }
@@ -349,7 +349,7 @@ def handle_new_data(username: str, source: str, params: dict = None):
             st.warning(f"警告: 保存的记录数 ({len(saved_records)}) 与预期 ({len(initial_records)}) 不匹配！")
         
         st.session_state.archive_name = archive_name
-        print(f"成功创建新存档: {archive_name}， ID: {archive_id}，保存了 {len(saved_records)} 条记录")
+        print(f"成功创建新存档: {archive_name},  ID: {archive_id}，保存了 {len(saved_records)} 条记录")
         st.session_state.data_created_step1 = True
         st.rerun()
 
@@ -660,8 +660,8 @@ if st.session_state.get('config_saved', False):
                 MGBL_VERSION_OPTIONS = ["自动区分B15版本", "不筛选 (取全版本最高50条成绩, 进行有特殊筛选的生成时推荐)"]
                 DXJS_EXPORT_OPTIONS = ["B50记录JSON (自动区分B15)", "所有记录JSON (不区分版本)"]
                 # MuNET导出谱面成绩只有乐曲id，当前metadata不包含国服以外曲目的id，暂时无法查曲目
-                MUJS_VERSION_OPTIONS = ["默认B50 (特殊筛选条件不可用)"] #, "全部成绩 (自动区分版本, 不准确)", "全部成绩 (不区分版本)"]
-                VERSION_OPTIONS = ["国际服 (CiRCLE & CiRCLE PLUS)", "日服 (CiRCLE & CiRCLE PLUS)", "全版本 (取全曲最高50条成绩，生成AP50/FC50时推荐)"]
+                MUJS_VERSION_OPTIONS = ["默认B50 (特殊筛选条件不可用)", "全部成绩 (不区分版本)"]
+                # VERSION_OPTIONS = ["国际服 (CiRCLE & CiRCLE PLUS)", "日服 (CiRCLE & CiRCLE PLUS)", "全版本 (取全曲最高50条成绩，生成AP50/FC50时推荐)"]
                 KEEP_FLOOR_OPTIONS = ["不保留", "保留"]
                 FILTER_TAG_OPTIONS = ["无筛选 (根据版本区分B35+B15或整体B50)", "极50 (只筛选FC以上成绩)", "神50 (只筛选AP以上成绩)"]
 
@@ -681,8 +681,9 @@ if st.session_state.get('config_saved', False):
                     dxjs_export = None
 
                 if data_source == DATA_SOURCE_OPTIONS[3]:
-                    st.info("""ℹ️ 由于乐曲元数据来源限制, 对于国服未实装的曲目无法查询到曲名、定数等。请手动补全您需要的部分。
-                            \n这些曲目仅能保留谱面成绩、等级(Expert/Master等)、类型(SD/DX), 但成绩之间在B35/B15的相对顺序保持一致。您可以根据相对顺位与成绩后的小数点填入标题等您需要的信息。""")
+                    st.info("""⚠️ 由于乐曲元数据来源限制, 对于国服未实装的曲目无法查询到曲名、定数等。请手动补全您需要的部分。
+                            \n在默认B50模式下, 曲目仅能保留谱面成绩、等级(Expert/Master等)、类型(SD/DX), 但成绩之间在B35/B15的相对顺序保持一致。您可以根据相对顺位与成绩后的小数点填入标题等您需要的信息。
+                            \n在全部成绩模式下, 仅能保留国服已实装曲目的信息。""")
                     mujs_version = st.radio("读取成绩类型", options=MUJS_VERSION_OPTIONS, key="mujs_version")
                 else:
                     mujs_version = None
@@ -691,7 +692,7 @@ if st.session_state.get('config_saved', False):
                 show_filter = (
                     data_source in [DATA_SOURCE_OPTIONS[0]]
                     or (data_source == DATA_SOURCE_OPTIONS[2] and dxjs_export != DXJS_EXPORT_OPTIONS[0])
-                    # or (data_source == DATA_SOURCE_OPTIONS[3] and mujs_version != MUJS_VERSION_OPTIONS[0])
+                    or (data_source == DATA_SOURCE_OPTIONS[3] and mujs_version != MUJS_VERSION_OPTIONS[0])
                 )
                 if show_filter:
                     filter_tag = st.radio("特殊筛选条件", options=FILTER_TAG_OPTIONS, key="filter_tag")
@@ -701,8 +702,15 @@ if st.session_state.get('config_saved', False):
                     keep_floor = None
 
                 data_input = st.text_area("请粘贴获取到的原始数据", height=200)
+                file_input = st.file_uploader("或上传数据文件 (如使用文件, 请确保数据输入框为空)", key="file_input")
 
-                if st.button("从粘贴内容创建新存档"):
+                if st.button("从粘贴内容或文件创建新存档"):
+                    if not data_input and file_input:
+                        try:
+                            data_input = file_input.read().decode("utf-8")
+                        except Exception as e:
+                            st.error(f"读取文件失败: {e}")
+                            data_input = None
                     if data_input:
                         # 配置参数并调用数据处理函数
                         query_type = "all"
@@ -724,14 +732,7 @@ if st.session_state.get('config_saved', False):
                         if file_type == "mgbl" and mgbl_version:
                             query_filter["b15_versions"] = -1 if mgbl_version == MGBL_VERSION_OPTIONS[-1] else 1
                         elif file_type == "mujs": # and mujs_version:
-                            query_filter["b15_versions"] = 1 # -1 if mujs_version == MUJS_VERSION_OPTIONS[-1] else 1
-                        # elif general_version:
-                        #     if general_version == VERSION_OPTIONS[0]:
-                        #         query_filter["b15_versions"] = 0
-                        #     elif general_version == VERSION_OPTIONS[1]:
-                        #         query_filter["b15_versions"] = 1
-                        #     elif general_version == VERSION_OPTIONS[2]:
-                        #         query_filter["b15_versions"] = -1
+                            query_filter["b15_versions"] = -1 if mujs_version == MUJS_VERSION_OPTIONS[-1] else 1
 
                         if filter_tag == FILTER_TAG_OPTIONS[1]:
                             query_filter["tag"] = "fc"
@@ -752,31 +753,69 @@ if st.session_state.get('config_saved', False):
                                 "filter": query_filter
                             })
                     else:
-                        st.warning("输入框内容为空。")
+                        st.warning("输入框内容为空且无文件被上传。")
             else: # G_type == "chunithm"
                 st.write("请将获取的数据文本粘贴到下方输入框中，并选择对应的数据源类型和其他信息。")
                 if st.button("💡 点击查看数据获取指南", key="read_other_data_import_guide_chu"):
                     other_data_import_guide(game_type="chunithm")
 
                 DATA_SOURCE_OPTIONS_CHU = ["Chu-gen RinNET Booklet 导出的B50", "RinNET玩家存档JSON"]
-                RIN_VERSION_OPTIONS = ["日服 (Mate)", "不筛选 (取全版本最高50条成绩, 进行有特殊筛选的生成时推荐)"]
-                N20_VERSION_OPTIONS = ["国际服 (X-VERSE-X)", "日服 (Mate)", "不筛选 (取全版本最高50条成绩, 进行有特殊筛选的生成时推荐)"]
+                RIN_VERSION_OPTIONS = ["全曲B30", "全曲B50"]
+                # N20_VERSION_OPTIONS = ["国际服 (X-VERSE-X)", "日服 (Mate)", "不筛选 (取全版本最高50条成绩, 进行有特殊筛选的生成时推荐)"]
+                FILTER_TAG_OPTIONS_CHU = ["无筛选", "只筛选FC以上成绩", "只筛选AJ以上成绩"]
+                KEEP_FLOOR_OPTIONS_CHU = ["不保留", "保留"]
 
                 data_source = st.radio("选择导入的数据源类型：", options=DATA_SOURCE_OPTIONS_CHU, key="data_source_chu")
-                query_type = "best"
-                query_filter = {}
 
-                if data_source == DATA_SOURCE_OPTIONS_CHU[0]:
-                    file_type = "crbl" # Chuni-gen Rin BookLet
-                    query_filter["n20_versions"] = 1
-                elif data_source == DATA_SOURCE_OPTIONS_CHU[1]:
-                    file_type = "rin"
-                    query_type = "all"
+                if data_source == DATA_SOURCE_OPTIONS_CHU[1]:
+                    rin_version = st.radio("N20筛选设置", options=RIN_VERSION_OPTIONS, key="rin_version")
+                    st.warning("⚠️ 由于乐曲元数据缺陷，该数据源仅能保留国服已有曲目的成绩，故不开放N20筛选。")
 
+                show_filter = (
+                    data_source in [DATA_SOURCE_OPTIONS_CHU[1]]
+                )
+                if show_filter:
+                    filter_tag = st.radio("特殊筛选条件", options=FILTER_TAG_OPTIONS_CHU, key="filter_tag_chu")
+                    keep_floor = st.radio("B35/B15范围外的地板同分谱面", options=KEEP_FLOOR_OPTIONS_CHU, key="keep_floor_chu")
+                else:
+                    filter_tag = None
+                    keep_floor = None
 
                 data_input = st.text_area("请粘贴获取到的原始数据", height=200)
-                if st.button("从粘贴内容创建新存档"):
+                file_input = st.file_uploader("或上传数据文件 (如使用文件，请确保数据输入框为空)", key="file_input_chu")
+                if st.button("从粘贴内容或文件创建新存档"):
+                    if not data_input and file_input:
+                        try:
+                            data_input = file_input.read().decode("utf-8")
+                            print("DEBUG: File loaded")
+                        except Exception as e:
+                            st.error(f"读取文件失败: {e}")
+                            data_input = None
                     if data_input:
+                        query_type = "best"
+                        query_filter = {}
+
+                        if data_source == DATA_SOURCE_OPTIONS_CHU[0]:
+                            file_type = "crbl" # Chuni-gen Rin BookLet
+                            query_filter["n20_versions"] = 1
+                        elif data_source == DATA_SOURCE_OPTIONS_CHU[1]:
+                            file_type = "rin"
+                            query_type = "all"
+                            query_filter["n20_versions"] = -1
+
+                        if file_type == "rin" and rin_version == RIN_VERSION_OPTIONS[0]:
+                            query_filter["best_past_len"] = 30
+                            query_filter["best_new_len"] = 0
+
+                        if filter_tag == FILTER_TAG_OPTIONS_CHU[1]:
+                            query_filter["tag"] = "fc"
+                        elif filter_tag == FILTER_TAG_OPTIONS_CHU[2]:
+                            query_filter["tag"] = "aj"
+
+                        if keep_floor == KEEP_FLOOR_OPTIONS_CHU[1]:
+                            query_filter["keep_floor"] = True  # 保留平替地板谱面
+
+                        print(f"DEBUG: processed parameters - file_type: {file_type}, query_type: {query_type}, query_filter: {query_filter}")
                         handle_new_data(
                             username,
                             source=file_type,
@@ -787,11 +826,8 @@ if st.session_state.get('config_saved', False):
                                 "filter": query_filter
                             })
                     else:
-                        st.warning("输入框内容为空。")
+                        st.warning("输入框内容为空且无文件被上传。")
 
-
-        # with st.expander("💡 数据在神秘的舞萌服务器里？加入交流群，说不定就能实装呢？"):
-        #     st.write("加入QQ群：[994702414](https://qm.qq.com/q/ogt02jHEjK)")
     # --- Navigation ---
     st.divider()
     if st.session_state.get('data_updated_step1', False) and st.session_state.get('archive_name'):
